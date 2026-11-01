@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Robot Controller</title>
+<style>
+:root{
+  --bg:#f4f5f8;--card:#fff;--ink:#14161c;--mute:#6b7280;--line:#e3e6ec;
+  --acc:#4f46e5;--accink:#fff;--ok:#16a34a;--bad:#dc2626;--warn:#d97706;--knob:#4f46e5;--pad:#eef0f6;
+}
+@media (prefers-color-scheme:dark){
+  :root{--bg:#0e1015;--card:#171a22;--ink:#eceef4;--mute:#8b93a7;--line:#262a36;--acc:#818cf8;--accink:#0e1015;--ok:#4ade80;--bad:#f87171;--warn:#fbbf24;--knob:#818cf8;--pad:#1d212c}
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0}
+body{background:var(--bg);color:var(--ink);font:15px/1.4 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;padding:16px;max-width:980px;margin:0 auto}
+header{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:16px}
+h1{font-size:20px;margin:0;flex:1}
+.pill{display:inline-flex;align-items:center;gap:6px;padding:5px 12px;border-radius:99px;background:var(--card);border:1px solid var(--line);font-size:13px;color:var(--mute)}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--bad)}
+.on .dot{background:var(--ok)}
+button{font:inherit;color:var(--ink);background:var(--card);border:1px solid var(--line);border-radius:12px;padding:10px 16px;cursor:pointer;transition:.12s}
+button:hover{border-color:var(--acc)}
+button:active{transform:scale(.97)}
+button:disabled{opacity:.4;pointer-events:none}
+.primary{background:var(--acc);color:var(--accink);border-color:var(--acc);font-weight:600}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+@media(max-width:720px){.grid{grid-template-columns:1fr}}
+.card{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:18px}
+.card h2{font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--mute);margin:0 0 12px;font-weight:600}
+.seg{display:grid;grid-template-columns:1fr 1fr;background:var(--pad);border-radius:14px;padding:4px;gap:4px}
+.seg button{border:0;background:transparent;padding:12px;border-radius:10px;font-weight:600;color:var(--mute)}
+.seg button.active{background:var(--acc);color:var(--accink)}
+.row{display:flex;gap:10px;margin-top:12px}
+.row button{flex:1;padding:16px;font-weight:700;font-size:16px}
+.go{background:var(--ok);color:#fff;border-color:var(--ok)}
+.stop{background:var(--bad);color:#fff;border-color:var(--bad)}
+.pad{position:relative;width:min(260px,70vw);aspect-ratio:1;border-radius:50%;background:var(--pad);border:1px solid var(--line);margin:4px auto;touch-action:none;user-select:none}
+.pad span{position:absolute;font-size:12px;color:var(--mute);font-weight:600}
+.pad .u{top:8px;left:50%;transform:translateX(-50%)}.pad .d{bottom:8px;left:50%;transform:translateX(-50%)}
+.pad .l{left:10px;top:50%;transform:translateY(-50%)}.pad .r{right:10px;top:50%;transform:translateY(-50%)}
+.knob{position:absolute;left:50%;top:50%;width:34%;height:34%;margin:-17% 0 0 -17%;border-radius:50%;background:var(--knob);box-shadow:0 6px 18px rgba(79,70,229,.35);touch-action:none}
+.dim{opacity:.35;pointer-events:none}
+.dir{text-align:center;margin-top:10px;color:var(--mute);font-size:13px;min-height:20px}
+.big{font-size:44px;font-weight:700;font-variant-numeric:tabular-nums;line-height:1}
+.big small{font-size:16px;color:var(--mute);font-weight:500}
+.bar{height:10px;background:var(--pad);border-radius:9px;overflow:hidden;margin-top:12px}
+.bar i{display:block;height:100%;width:0;background:var(--ok);transition:width .25s,background .25s}
+.ctl{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:14px}
+.ctl label{color:var(--mute);font-size:13px}
+.step{display:flex;align-items:center;gap:8px}
+.step button{padding:6px 14px;font-size:18px;line-height:1}
+.step b{min-width:32px;text-align:center}
+.sw{position:relative;width:48px;height:28px;border-radius:99px;background:var(--pad);border:1px solid var(--line);padding:0}
+.sw::after{content:"";position:absolute;top:3px;left:3px;width:20px;height:20px;border-radius:50%;background:var(--mute);transition:.15s}
+.sw.on{background:var(--acc);border-color:var(--acc)}
+.sw.on::after{left:23px;background:var(--accink)}
+#log{height:170px;overflow:auto;font:12px/1.5 ui-monospace,Menlo,Consolas,monospace;background:var(--pad);border-radius:12px;padding:10px;color:var(--mute);white-space:pre-wrap}
+#log .tx{color:var(--acc)}
+.wide{grid-column:1/-1}
+.note{font-size:12px;color:var(--mute);margin-top:10px}
+</style>
+</head>
+<body>
+<header>
+  <h1>🤖 Robot Controller</h1>
+  <span class="pill" id="conn"><span class="dot"></span><span id="connTxt">Disconnected</span></span>
+  <span class="pill" id="modeTag">Mode: –</span>
+  <button class="primary" id="btnConnect">Connect</button>
+</header>
+
+<div class="grid">
+  <section class="card">
+    <h2>Mode</h2>
+    <div class="seg">
+      <button id="mAuto" data-m="A">Automatic</button>
+      <button id="mMan" data-m="M">Manual</button>
+    </div>
+    <div class="row">
+      <button class="go" id="btnStart">▶ Start</button>
+      <button class="stop" id="btnStop">■ Stop</button>
+    </div>
+    <p class="note">Start = autonomous driving. Stop = halt motors, arms and neck, and switch to manual.</p>
+  </section>
+
+  <section class="card">
+    <h2>Joystick <span style="text-transform:none;letter-spacing:0">(manual mode · or WASD / arrows)</span></h2>
+    <div class="pad" id="pad">
+      <span class="u">FWD</span><span class="d">BACK</span><span class="l">LEFT</span><span class="r">RIGHT</span>
+      <div class="knob" id="knob"></div>
+    </div>
+    <div class="dir" id="dir">Idle</div>
+  </section>
+
+  <section class="card">
+    <h2>Front distance</h2>
+    <div class="big"><span id="dist">–</span> <small>cm</small></div>
+    <div class="bar"><i id="distBar"></i></div>
+    <div class="ctl"><label>Refresh reading</label><button id="btnQ">Read now</button></div>
+  </section>
+
+  <section class="card">
+    <h2>Controls</h2>
+    <div class="ctl"><label>Arm swing while moving</label><button class="sw" id="swArm" aria-label="Toggle arm swing"></button></div>
+    <div class="ctl"><label>Speed</label>
+      <div class="step"><button data-c="-">−</button><b id="spd">170</b><button data-c="+">+</button></div></div>
+    <div class="ctl"><label>Left arm</label>
+      <div class="step"><button data-c="[">▼</button><button data-c="]">▲</button></div></div>
+    <div class="ctl"><label>Right arm</label>
+      <div class="step"><button data-c="{">▼</button><button data-c="}">▲</button></div></div>
+  </section>
+
+  <section class="card wide">
+    <h2>Robot log</h2>
+    <div id="log"></div>
+    <p class="note">Needs desktop Chrome or Edge. Pair the HC-05 in your OS Bluetooth settings first (PIN 1234 or 0000), then press Connect and pick its COM / serial port. Open this file directly or from https.</p>
+  </section>
+</div>
+
+<script>
+const $ = id => document.getElementById(id);
+let port, writer, reader, connected = false, mode = null, armSwing = true;
+let drive = 'P', lastSent = 0, loop = null;
+
+/* ---------- logging ---------- */
+function log(t, cls){
+  const el = $('log'), d = document.createElement('div');
+  if (cls) d.className = cls;
+  d.textContent = t;
+  el.appendChild(d);
+  while (el.childNodes.length > 200) el.removeChild(el.firstChild);
+  el.scrollTop = el.scrollHeight;
+}
+
+/* ---------- serial ---------- */
+async function send(c, quiet){
+  if (!connected) return;
+  try { await writer.write(new TextEncoder().encode(c)); if(!quiet) log('→ ' + c, 'tx'); }
+  catch(e){ log('Send failed: ' + e.message); }
+}
+
+async function connect(){
+  if (!('serial' in navigator)) { log('Web Serial is not supported here. Use desktop Chrome or Edge.'); return; }
+  try{
+    port = await navigator.serial.requestPort();
+    await port.open({ baudRate: 9600 });
+    writer = port.writable.getWriter();
+    connected = true; setConn(true);
+    log('Connected.');
+    readLoop();
+    setTimeout(() => send('?'), 600);
+    loop = setInterval(tick, 120);
+  }catch(e){ log('Connect failed: ' + e.message); }
+}
+
+async function disconnect(){
+  clearInterval(loop);
+  try{ await send('P', true); }catch(e){}
+  connected = false;
+  try{ reader && await reader.cancel(); }catch(e){}
+  try{ writer && writer.releaseLock(); }catch(e){}
+  try{ port && await port.close(); }catch(e){}
+  setConn(false); log('Disconnected.');
+}
+
+async function readLoop(){
+  const dec = new TextDecoder(); let buf = '';
+  while (port && port.readable && connected){
+    reader = port.readable.getReader();
+    try{
+      while (true){
+        const { value, done } = await reader.read();
+        if (done) break;
+        buf += dec.decode(value, { stream: true });
+        let i;
+        while ((i = buf.search(/\r?\n/)) >= 0){
+          const line = buf.slice(0, i).trim(); buf = buf.slice(i + 1);
+          if (line) onLine(line);
+        }
+      }
+    }catch(e){ break; }
+    finally{ reader.releaseLock(); }
+  }
+  if (connected) disconnect();
+}
+
+function setConn(on){
+  $('conn').classList.toggle('on', on);
+  $('connTxt').textContent = on ? 'Connected' : 'Disconnected';
+  $('btnConnect').textContent = on ? 'Disconnect' : 'Connect';
+  if (!on){ setMode(null); }
+}
+
+/* ---------- parsing robot messages ---------- */
+function onLine(l){
+  log(l);
+  let m;
+  if ((m = l.match(/(Front|Center|Manual forward distance):\s*(\d+)\s*cm/i))) setDist(+m[2]);
+  else if (/(Front|Manual forward distance):.*No valid/i.test(l)) setDist(null);
+  if (/AUTONOMOUS MODE enabled/i.test(l) || /Mode:\s*AUTO/i.test(l)) setMode('A');
+  if (/MANUAL MODE enabled/i.test(l) || /Mode:\s*MANUAL/i.test(l) || /STOP:/i.test(l)) setMode('M');
+  if ((m = l.match(/Arm swing:\s*(on|off)/i))) setArm(m[1].toLowerCase() === 'on');
+  if (/Arm swing enabled/i.test(l)) setArm(true);
+  if (/Arm swing disabled/i.test(l) || /STOP:/i.test(l)) setArm(false);
+  if ((m = l.match(/(?:Speed:|\[SPEED\])\s*(\d+)/i))) $('spd').textContent = m[1];
+}
+
+function setDist(v){
+  $('dist').textContent = v == null ? '–' : v;
+  const pct = v == null ? 0 : Math.min(100, v / 150 * 100);
+  const b = $('distBar'); b.style.width = pct + '%';
+  b.style.background = v == null ? 'var(--mute)' : v < 20 ? 'var(--bad)' : v < 40 ? 'var(--warn)' : 'var(--ok)';
+}
+function setMode(m){
+  mode = m;
+  $('mAuto').classList.toggle('active', m === 'A');
+  $('mMan').classList.toggle('active', m === 'M');
+  $('modeTag').textContent = 'Mode: ' + (m === 'A' ? 'Automatic' : m === 'M' ? 'Manual' : '–');
+  $('pad').classList.toggle('dim', m !== 'M');
+  if (m !== 'M') resetKnob();
+}
+function setArm(on){ armSwing = on; $('swArm').classList.toggle('on', on); }
+
+/* ---------- buttons ---------- */
+$('btnConnect').onclick = () => connected ? disconnect() : connect();
+document.querySelectorAll('[data-m]').forEach(b => b.onclick = () => send(b.dataset.m));
+document.querySelectorAll('[data-c]').forEach(b => b.onclick = () => send(b.dataset.c));
+$('btnStart').onclick = () => send('A');
+$('btnStop').onclick = () => { drive = 'P'; send('S'); };
+$('btnQ').onclick = () => send('?');
+$('swArm').onclick = () => { send(armSwing ? 'X' : 'W'); setArm(!armSwing); };
+
+/* ---------- joystick ---------- */
+const pad = $('pad'), knob = $('knob');
+let dragging = false;
+const NAMES = { F:'Forward', B:'Backward', L:'Turning left', R:'Turning right', P:'Idle' };
+
+function resetKnob(){ knob.style.transform = ''; setDrive('P'); dragging = false; }
+function setDrive(c){
+  if (c !== drive){ drive = c; $('dir').textContent = NAMES[c];
+    if (c === 'P') send('P', true); else { send(c, true); lastSent = Date.now(); } }
+}
+function moveKnob(e){
+  const r = pad.getBoundingClientRect(), R = r.width / 2;
+  let dx = e.clientX - (r.left + R), dy = e.clientY - (r.top + R);
+  const max = R * 0.62, len = Math.hypot(dx, dy);
+  if (len > max){ dx *= max / len; dy *= max / len; }
+  knob.style.transform = `translate(${dx}px,${dy}px)`;
+  const nx = dx / max, ny = dy / max;
+  if (Math.hypot(nx, ny) < 0.35) return setDrive('P');
+  setDrive(Math.abs(ny) >= Math.abs(nx) ? (ny < 0 ? 'F' : 'B') : (nx > 0 ? 'R' : 'L'));
+}
+pad.addEventListener('pointerdown', e => { if (mode !== 'M') return; dragging = true; pad.setPointerCapture(e.pointerId); moveKnob(e); });
+pad.addEventListener('pointermove', e => { if (dragging) moveKnob(e); });
+['pointerup','pointercancel'].forEach(t => pad.addEventListener(t, resetKnob));
+
+/* resend the held direction; the robot stops by itself if it hears nothing for 0.7 s */
+function tick(){
+  if (drive !== 'P' && mode === 'M' && Date.now() - lastSent >= 120){ send(drive, true); lastSent = Date.now(); }
+}
+
+/* ---------- keyboard ---------- */
+const KEYS = { ArrowUp:'F', w:'F', ArrowDown:'B', s:'B', ArrowLeft:'L', a:'L', ArrowRight:'R', d:'R' };
+const held = [];
+addEventListener('keydown', e => {
+  const c = KEYS[e.key]; if (!c || e.repeat || mode !== 'M') return;
+  e.preventDefault(); held.push(c); setDrive(c);
+});
+addEventListener('keyup', e => {
+  const c = KEYS[e.key]; if (!c) return;
+  const i = held.indexOf(c); if (i >= 0) held.splice(i, 1);
+  setDrive(held.length ? held[held.length - 1] : 'P');
+});
+document.addEventListener('visibilitychange', () => { if (document.hidden){ held.length = 0; resetKnob(); } });
+
+if ('serial' in navigator) navigator.serial.addEventListener('disconnect', () => connected && disconnect());
+setMode(null); setArm(true);
+log('Ready. Pair the HC-05, then press Connect.');
+</script>
+</body>
+</html>
